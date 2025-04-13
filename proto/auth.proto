@@ -1,0 +1,114 @@
+syntax = "proto3";
+package steam;
+option go_package = ".";
+
+enum EAuthTokenPlatformType {
+	k_EAuthTokenPlatformType_Unknown = 0;
+	k_EAuthTokenPlatformType_SteamClient = 1;
+	k_EAuthTokenPlatformType_WebBrowser = 2;
+	k_EAuthTokenPlatformType_MobileApp = 3;
+}
+
+enum ESessionPersistence {
+	k_ESessionPersistence_Ephemeral = 0;
+	k_ESessionPersistence_Persistent = 1;
+	k_ESessionPersistence_Invalid = -1;
+}
+
+enum EAuthTokenAppType {
+	k_EAuthTokenAppType_Unknown = 0;
+	k_EAuthTokenAppType_Mobile_SteamApp = 1;
+	k_EAuthTokenAppType_Mobile_ChatApp = 2;
+}
+
+enum EAuthSessionGuardType {
+	k_EAuthSessionGuardType_Unknown = 0;
+	k_EAuthSessionGuardType_None = 1;
+	k_EAuthSessionGuardType_EmailCode = 2;
+	k_EAuthSessionGuardType_DeviceCode = 3;
+	k_EAuthSessionGuardType_DeviceConfirmation = 4;
+	k_EAuthSessionGuardType_EmailConfirmation = 5;
+	k_EAuthSessionGuardType_MachineToken = 6;
+	k_EAuthSessionGuardType_LegacyMachineAuth = 7;
+}
+
+message CAuthentication_GetPasswordRSAPublicKey_Request {
+	string account_name = 1;
+}
+
+message CAuthentication_GetPasswordRSAPublicKey_Response {
+	string publickey_mod = 1;
+	string publickey_exp = 2;
+	uint64 timestamp = 3;
+}
+
+
+message CAuthentication_DeviceDetails {
+	string device_friendly_name = 1;
+	EAuthTokenPlatformType platform_type = 2;
+	int32 os_type = 3;
+	uint32 gaming_device_type = 4;
+	uint32 client_count = 5;
+	bytes machine_id = 6;
+	EAuthTokenAppType app_type = 7;
+}
+
+
+message CAuthentication_BeginAuthSessionViaCredentials_Request {
+	string device_friendly_name = 1;
+	string account_name = 2;
+	string encrypted_password = 3;
+	uint64 encryption_timestamp = 4;
+	bool remember_login = 5;
+	EAuthTokenPlatformType platform_type = 6;
+	ESessionPersistence persistence = 7;
+	string website_id = 8;
+	CAuthentication_DeviceDetails device_details = 9;
+	string guard_data = 10;
+	uint32 language = 11;
+	int32 qos_level = 12;
+}
+
+message CAuthentication_AllowedConfirmation {
+	EAuthSessionGuardType confirmation_type = 1;
+	string associated_message = 2;
+}
+
+message CAuthentication_BeginAuthSessionViaCredentials_Response {
+	uint64 client_id = 1;
+	bytes request_id = 2;
+	float interval = 3;
+	CAuthentication_AllowedConfirmation allowed_confirmations = 4;
+	uint64 steam_id = 5;
+	string weak_token = 6;
+	string agreement_session_url = 7;
+	string extended_error_message = 8;
+}
+
+message CAuthentication_UpdateAuthSessionWithSteamGuardCode_Request {
+	uint64 client_id = 1;
+	fixed64 steam_id = 2;
+	string code = 3;
+	EAuthSessionGuardType code_type = 4;
+}
+
+message CAuthentication_UpdateAuthSessionWithSteamGuardCode_Response {
+	string agreement_session_url = 7;
+}
+
+message CAuthentication_PollAuthSessionStatus_Request {
+	uint64 client_id = 1;
+	bytes request_id = 2;
+	fixed64 token_to_revoke = 3;
+}
+
+message CAuthentication_PollAuthSessionStatus_Response {
+	uint64 new_client_id = 1;
+	string new_challenge_url = 2;
+	string refresh_token = 3;
+	string access_token = 4;
+	bool had_remote_interaction = 5;
+	string account_name = 6;
+	string new_guard_data = 7;
+	string agreement_session_url = 8;
+}
