@@ -7,7 +7,11 @@ import (
 )
 
 func CheckHeader(header *http.Header) error {
-	xEresult, err := strconv.Atoi(header.Get("X-Eresult"))
+	xEresultStr := header.Get("X-Eresult")
+	if xEresultStr == "" {
+		return nil
+	}
+	xEresult, err := strconv.Atoi(xEresultStr)
 	if err != nil {
 		return err
 	}
