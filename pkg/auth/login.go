@@ -11,6 +11,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	pb "steam/pkg/proto"
+	"steam/pkg/utils"
 	"strconv"
 	"strings"
 	"time"
@@ -26,7 +27,7 @@ func (mgr *Core) Login() error {
 	if err != nil {
 		return err
 	}
-	time.Sleep(time.Millisecond * time.Duration(randRange(120, 300)))
+	time.Sleep(time.Millisecond * time.Duration(utils.RandRange(120, 300)))
 
 	// Get RSA public key by proto message
 	rsaRes := pb.CAuthentication_GetPasswordRSAPublicKey_Response{}
@@ -38,7 +39,8 @@ func (mgr *Core) Login() error {
 	if err != nil {
 		return err
 	}
-	time.Sleep(time.Millisecond * time.Duration(randRange(120, 300)))
+
+	time.Sleep(time.Millisecond * time.Duration(utils.RandRange(120, 300)))
 
 	log.Infof("Try login as user: %s...", mgr.loginInfo.UserName)
 	// Try begin auth
@@ -48,7 +50,7 @@ func (mgr *Core) Login() error {
 	if err != nil {
 		return err
 	}
-	time.Sleep(time.Millisecond * time.Duration(randRange(120, 300)))
+	time.Sleep(time.Millisecond * time.Duration(utils.RandRange(120, 300)))
 
 	// Handle confirmation if exist
 	confirmationType := beginAuthRes.AllowedConfirmations.ConfirmationType
