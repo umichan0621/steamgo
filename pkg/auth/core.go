@@ -18,21 +18,22 @@ type LoginInfo struct {
 	Password string
 }
 
-type Manager struct {
+type Core struct {
+	httpClient *http.Client
 	loginInfo  LoginInfo
 	sessionId  string
-	httpClient http.Client
+	SteamId    int64
 }
 
-func (mgr *Manager) Init(info LoginInfo) {
-	mgr.loginInfo = info
-	mgr.sessionId = ""
-	mgr.httpClient = http.Client{}
+func (core *Core) Init(httpClient *http.Client, info LoginInfo) {
+	core.loginInfo = info
+	core.sessionId = ""
+	core.httpClient = httpClient
 }
 
 // timeout: millsecond, set only while timeout > 0;
 // proxy: if proxyUrl == "", ignore
-func (mgr *Manager) SetHttpParam(timeout int, proxy string) error {
+func (core *Core) SetHttpParam(timeout int, proxy string) error {
 	transport := &http.Transport{}
 	if proxy != "" {
 		proxyUrl, err := url.Parse(proxy)
@@ -49,8 +50,8 @@ func (mgr *Manager) SetHttpParam(timeout int, proxy string) error {
 		transport.TLSHandshakeTimeout = timeoutVal
 		transport.ResponseHeaderTimeout = timeoutVal
 		transport.ExpectContinueTimeout = timeoutVal
-		mgr.httpClient.Timeout = timeoutVal
+		core.httpClient.Timeout = timeoutVal
 	}
-	mgr.httpClient.Transport = transport
+	core.httpClient.Transport = transport
 	return nil
 }

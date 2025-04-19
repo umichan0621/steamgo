@@ -5,67 +5,68 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"encoding/base64"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"math/big"
 	"mime/multipart"
 	"net/http"
+	"net/http/cookiejar"
+	"net/url"
+
+	errcode "steam/pkg/err"
 	pb "steam/pkg/proto"
+	"steam/pkg/utils"
 	"strconv"
 	"strings"
 	"time"
 
 	log "github.com/sirupsen/logrus"
+	"github.com/tidwall/gjson"
 	"google.golang.org/protobuf/proto"
 )
 
-func (mgr *Manager) Login() error {
+func (core *Core) Login() error {
 	log.Info("Connecting to steam server...")
-	// Get session id from steam store
-	err := mgr.getSessionId()
-	if err != nil {
-		return err
-	}
-	time.Sleep(time.Millisecond * time.Duration(randRange(120, 300)))
-
 	// Get RSA public key by proto message
 	rsaRes := pb.CAuthentication_GetPasswordRSAPublicKey_Response{}
-	err = mgr.getPasswordRSAPublicKey(&rsaRes)
+	err := core.getPasswordRSAPublicKey(&rsaRes)
 	if err != nil {
 		return err
 	}
-	encryptedPassword, err := mgr.encryptPassword(rsaRes.PublickeyMod, rsaRes.PublickeyExp)
+	encryptedPassword, err := core.encryptPassword(rsaRes.PublickeyMod, rsaRes.PublickeyExp)
 	if err != nil {
 		return err
 	}
-	time.Sleep(time.Millisecond * time.Duration(randRange(120, 300)))
 
-	log.Infof("Try login as user: %s...", mgr.loginInfo.UserName)
+	time.Sleep(time.Millisecond * time.Duration(utils.RandRange(120, 300)))
+
+	log.Infof("Try login as user: %s...", core.loginInfo.UserName)
 	// Try begin auth
 	beginAuthRes := pb.CAuthentication_BeginAuthSessionViaCredentials_Response{}
-	err = mgr.beginAuthSessionViaCredentials(encryptedPassword, rsaRes.Timestamp,
+	err = core.beginAuthSessionViaCredentials(encryptedPassword, rsaRes.Timestamp,
 		&beginAuthRes)
 	if err != nil {
 		return err
 	}
-	time.Sleep(time.Millisecond * time.Duration(randRange(120, 300)))
+	time.Sleep(time.Millisecond * time.Duration(utils.RandRange(120, 300)))
 
 	// Handle confirmation if exist
 	confirmationType := beginAuthRes.AllowedConfirmations.ConfirmationType
 	if confirmationType != pb.EAuthSessionGuardType_k_EAuthSessionGuardType_None {
 		log.Info("Need authentication...")
 		updateAuthRes := pb.CAuthentication_UpdateAuthSessionWithSteamGuardCode_Response{}
-		mgr.updateAuthSessionWithSteamGuardCode(beginAuthRes.ClientId, beginAuthRes.SteamId, confirmationType,
+		core.updateAuthSessionWithSteamGuardCode(beginAuthRes.ClientId, beginAuthRes.SteamId, confirmationType,
 			&updateAuthRes)
 	}
 
 	log.Info("Logging in...")
 	pollAuthRes := pb.CAuthentication_PollAuthSessionStatus_Response{}
-	err = mgr.pollAuthSessionStatus(beginAuthRes.ClientId, beginAuthRes.RequestId, &pollAuthRes)
+	err = core.pollAuthSessionStatus(beginAuthRes.ClientId, beginAuthRes.RequestId, &pollAuthRes)
 	if err != nil {
 		return err
 	}
-	err = mgr.finalizeLogin(pollAuthRes.RefreshToken)
+	err = core.finalizeLogin(pollAuthRes.RefreshToken)
 	if err != nil {
 		return err
 	}
@@ -73,40 +74,9 @@ func (mgr *Manager) Login() error {
 	return nil
 }
 
-func (mgr *Manager) getSessionId() error {
-	httpReq, err := http.NewRequest("GET", kURI_STEAM_STROE, nil)
-	if err != nil {
-		return err
-	}
-	res, err := mgr.httpClient.Do(httpReq)
-	if err != nil {
-		return err
-	}
-	defer res.Body.Close()
-	if res.StatusCode != 200 {
-		return fmt.Errorf("fail to connect steam store, status code = %d", res.StatusCode)
-	}
-	keyWord := "sessionid="
-	mgr.sessionId = ""
-	for _, cookie := range res.Cookies() {
-		cookieStr := cookie.String()
-		index := strings.Index(cookieStr, keyWord)
-		if index == -1 {
-			continue
-		}
-		cookieStr = cookieStr[index+len(keyWord):]
-		index = strings.Index(cookieStr, ";")
-		mgr.sessionId = cookieStr[:index]
-	}
-	if mgr.sessionId == "" {
-		return fmt.Errorf("fail to get session id")
-	}
-	return nil
-}
-
-func (mgr *Manager) getPasswordRSAPublicKey(rsaRes *pb.CAuthentication_GetPasswordRSAPublicKey_Response) error {
+func (core *Core) getPasswordRSAPublicKey(rsaRes *pb.CAuthentication_GetPasswordRSAPublicKey_Response) error {
 	pbReq := pb.CAuthentication_GetPasswordRSAPublicKey_Request{
-		AccountName: mgr.loginInfo.UserName,
+		AccountName: core.loginInfo.UserName,
 	}
 	marshalData, err := proto.Marshal(&pbReq)
 	if err != nil {
@@ -119,10 +89,8 @@ func (mgr *Manager) getPasswordRSAPublicKey(rsaRes *pb.CAuthentication_GetPasswo
 	if err != nil {
 		return err
 	}
-	httpReq.Header.Set("Referer", kURI_STEAM_STROE+"/")
-	httpReq.Header.Set("Origin", kURI_STEAM_STROE)
 
-	res, err := mgr.httpClient.Do(httpReq)
+	res, err := core.httpClient.Do(httpReq)
 	if err != nil {
 		return err
 	}
@@ -142,20 +110,21 @@ func (mgr *Manager) getPasswordRSAPublicKey(rsaRes *pb.CAuthentication_GetPasswo
 	return nil
 }
 
-func (mgr *Manager) beginAuthSessionViaCredentials(encryptedPassword string, rsaTimestamp uint64,
+func (core *Core) beginAuthSessionViaCredentials(encryptedPassword string, rsaTimestamp uint64,
 	beginAuthRes *pb.CAuthentication_BeginAuthSessionViaCredentials_Response) error {
 	pbReq := pb.CAuthentication_BeginAuthSessionViaCredentials_Request{
-		AccountName:         mgr.loginInfo.UserName,
+		DeviceFriendlyName:  "Galaxy S22",
+		AccountName:         core.loginInfo.UserName,
 		EncryptedPassword:   encryptedPassword,
 		EncryptionTimestamp: rsaTimestamp,
 		RememberLogin:       true,
+		Persistence:         pb.ESessionPersistence_k_ESessionPersistence_Persistent,
+		WebsiteId:           "Mobile",
+		Language:            6,
 		DeviceDetails: &pb.CAuthentication_DeviceDetails{
-			DeviceFriendlyName: "Mozilla/5.0 (X11; Linux x86_64; rv:1.9.5.20) Gecko/2812-12-10 04:56:28 Firefox/3.8",
+			DeviceFriendlyName: "Galaxy S22",
 			PlatformType:       pb.EAuthTokenPlatformType_k_EAuthTokenPlatformType_MobileApp,
 		},
-		Persistence: pb.ESessionPersistence_k_ESessionPersistence_Persistent,
-		WebsiteId:   "Community",
-		Language:    6,
 	}
 
 	marshalData, err := proto.Marshal(&pbReq)
@@ -165,7 +134,7 @@ func (mgr *Manager) beginAuthSessionViaCredentials(encryptedPassword string, rsa
 	protoEncoded := base64.StdEncoding.EncodeToString(marshalData)
 	reqUrl := fmt.Sprintf("%s/IAuthenticationService/BeginAuthSessionViaCredentials/v1", kURI_STEAM_API)
 
-	res, err := mgr.loginAuthPost(reqUrl, protoEncoded)
+	res, err := core.loginAuthPost(reqUrl, protoEncoded)
 	if err != nil {
 		return err
 	}
@@ -177,19 +146,10 @@ func (mgr *Manager) beginAuthSessionViaCredentials(encryptedPassword string, rsa
 	if res.StatusCode != 200 {
 		return fmt.Errorf("fail to request BeginAuthSessionViaCredentials, status code = %d", res.StatusCode)
 	}
-
-	xEresult, err := strconv.Atoi(res.Header.Get("X-Eresult"))
+	err = errcode.CheckHeader(&res.Header)
 	if err != nil {
 		return err
 	}
-	if xEresult != 1 {
-		if xEresult == 5 {
-			return fmt.Errorf("fail to login, error: Invaild username/password")
-		} else {
-			return fmt.Errorf("fail to login, X-Eresult: %d", xEresult)
-		}
-	}
-
 	err = proto.Unmarshal(data, beginAuthRes)
 	if err != nil {
 		return err
@@ -200,7 +160,7 @@ func (mgr *Manager) beginAuthSessionViaCredentials(encryptedPassword string, rsa
 	return nil
 }
 
-func (mgr *Manager) updateAuthSessionWithSteamGuardCode(clientId, steamId uint64, guardType pb.EAuthSessionGuardType,
+func (core *Core) updateAuthSessionWithSteamGuardCode(clientId, steamId uint64, guardType pb.EAuthSessionGuardType,
 	updateAuthRes *pb.CAuthentication_UpdateAuthSessionWithSteamGuardCode_Response) error {
 	log.Errorln("clientId =", clientId)
 	log.Errorln("SteamId =", steamId)
@@ -237,7 +197,7 @@ func (mgr *Manager) updateAuthSessionWithSteamGuardCode(clientId, steamId uint64
 	}
 	protoEncoded := base64.StdEncoding.EncodeToString(marshalData)
 	reqUrl := fmt.Sprintf("%s/IAuthenticationService/UpdateAuthSessionWithSteamGuardCode/v1", kURI_STEAM_API)
-	res, err := mgr.loginAuthPost(reqUrl, protoEncoded)
+	res, err := core.loginAuthPost(reqUrl, protoEncoded)
 	if err != nil {
 		return err
 	}
@@ -253,7 +213,7 @@ func (mgr *Manager) updateAuthSessionWithSteamGuardCode(clientId, steamId uint64
 	return proto.Unmarshal(data, updateAuthRes)
 }
 
-func (mgr *Manager) pollAuthSessionStatus(clientId uint64, requestId []byte,
+func (core *Core) pollAuthSessionStatus(clientId uint64, requestId []byte,
 	pollAuthRes *pb.CAuthentication_PollAuthSessionStatus_Response) error {
 	pbReq := pb.CAuthentication_PollAuthSessionStatus_Request{
 		ClientId:  clientId,
@@ -266,7 +226,7 @@ func (mgr *Manager) pollAuthSessionStatus(clientId uint64, requestId []byte,
 	}
 	protoEncoded := base64.StdEncoding.EncodeToString(marshalData)
 	reqUrl := fmt.Sprintf("%s/IAuthenticationService/PollAuthSessionStatus/v1", kURI_STEAM_API)
-	res, err := mgr.loginAuthPost(reqUrl, protoEncoded)
+	res, err := core.loginAuthPost(reqUrl, protoEncoded)
 	if err != nil {
 		return err
 	}
@@ -278,22 +238,27 @@ func (mgr *Manager) pollAuthSessionStatus(clientId uint64, requestId []byte,
 	if res.StatusCode != 200 {
 		return fmt.Errorf("fail to request PollAuthSessionStatus, status code = %d", res.StatusCode)
 	}
-
-	xEresult, err := strconv.Atoi(res.Header.Get("X-Eresult"))
+	err = errcode.CheckHeader(&res.Header)
 	if err != nil {
 		return err
-	}
-	if xEresult != 1 {
-		return fmt.Errorf("fail to login, X-Eresult: %d", xEresult)
 	}
 	return proto.Unmarshal(data, pollAuthRes)
 }
 
-func (mgr *Manager) finalizeLogin(refreshToken string) error {
+func (core *Core) finalizeLogin(refreshToken string) error {
+	randomBytes := make([]byte, 12)
+	if _, err := rand.Read(randomBytes); err != nil {
+		return err
+	}
+
+	sessionID := make([]byte, hex.EncodedLen(len(randomBytes)))
+	hex.Encode(sessionID, randomBytes)
+	core.sessionId = string(sessionID)
+
 	reqBody := new(bytes.Buffer)
 	multipartWriter := multipart.NewWriter(reqBody)
 	multipartWriter.WriteField("nonce", refreshToken)
-	multipartWriter.WriteField("sessionid", mgr.sessionId)
+	multipartWriter.WriteField("sessionid", core.sessionId)
 	multipartWriter.WriteField("redir", fmt.Sprintf("%s/login/home/?goto=", kURI_STEAM_STROE))
 	multipartWriter.Close()
 
@@ -302,10 +267,8 @@ func (mgr *Manager) finalizeLogin(refreshToken string) error {
 	if err != nil {
 		return err
 	}
-	httpReq.Header.Set("Referer", kURI_STEAM_STROE+"/")
-	httpReq.Header.Set("Origin", kURI_STEAM_STROE)
 	httpReq.Header.Set("Content-Type", multipartWriter.FormDataContentType())
-	res, err := mgr.httpClient.Do(httpReq)
+	res, err := core.httpClient.Do(httpReq)
 	if err != nil {
 		return err
 	}
@@ -317,13 +280,113 @@ func (mgr *Manager) finalizeLogin(refreshToken string) error {
 	if res.StatusCode != 200 {
 		return fmt.Errorf("fail to post finalizeLogin, status code = %d", res.StatusCode)
 	}
-	fmt.Println(string(data))
-	// return proto.Unmarshal(data, pollAuthRes)
+	// Add cookie
+	jar, err := cookiejar.New(nil)
+	if err != nil {
+		return err
+	}
+	cookieList := []*http.Cookie{}
+	for _, cookie := range res.Cookies() {
+		if cookie.Name == "steamRefresh_steam" {
+			cookieList = append(cookieList, cookie)
+			break
+		}
+	}
+	jar.SetCookies(
+		&url.URL{
+			Scheme: "https",
+			Host:   "login.steampowered.com",
+		},
+		cookieList,
+	)
 
+	// Get loginSecure
+	jsonData := string(data)
+	steamId := gjson.Get(jsonData, "steamID").String()
+	if steamId == "" {
+		return fmt.Errorf("fail to get steam Id, response data: %s", jsonData)
+	}
+	nonce := ""
+	auth := ""
+	for _, tokenData := range gjson.Get(jsonData, "transfer_info").Array() {
+		reqUrl := tokenData.Get("url").String()
+		if reqUrl != "https://steamcommunity.com/login/settoken" {
+			continue
+		}
+		params := tokenData.Get("params")
+		nonce = params.Get("nonce").String()
+		auth = params.Get("auth").String()
+		break
+	}
+	reqBody = new(bytes.Buffer)
+	multipartWriter = multipart.NewWriter(reqBody)
+	multipartWriter.WriteField("nonce", nonce)
+	multipartWriter.WriteField("auth", auth)
+	multipartWriter.WriteField("steamID", steamId)
+	multipartWriter.Close()
+
+	httpReq, err = http.NewRequest("POST", reqUrl, reqBody)
+	if err != nil {
+		return err
+	}
+	httpReq.AddCookie(&http.Cookie{
+		Name:  "sessionid",
+		Value: core.sessionId,
+	})
+	httpReq.Header.Set("Content-Type", multipartWriter.FormDataContentType())
+	res, err = http.DefaultClient.Do(httpReq)
+	if err != nil {
+		return err
+	}
+
+	cookieList = []*http.Cookie{}
+	for _, cookie := range res.Cookies() {
+		if cookie.Name != "steamLoginSecure" {
+			continue
+		}
+		cookieList = append(cookieList, cookie)
+		break
+	}
+	cookieList = append(cookieList, &http.Cookie{
+		Name:     "sessionid",
+		Value:    core.sessionId,
+		SameSite: http.SameSiteNoneMode,
+		Secure:   true,
+		HttpOnly: true,
+		Path:     "/"},
+	)
+	jar.SetCookies(
+		&url.URL{
+			Scheme: "https",
+			Host:   "steamcommunity.com",
+		},
+		cookieList,
+	)
+
+	core.SteamId, err = strconv.ParseInt(steamId, 10, 64)
+	if err != nil {
+		return err
+	}
+
+	cookieList = []*http.Cookie{
+		{Name: "mobileClientVersion", Value: "0 (2.1.3)"},
+		{Name: "mobileClient", Value: "android"},
+		{Name: "steamid", Value: steamId},
+		{Name: "Steam_Language", Value: "english"},
+		{Name: "dob", Value: ""},
+	}
+	jar.SetCookies(
+		&url.URL{
+			Scheme: "https",
+			Host:   "steamcommunity.com",
+		},
+		cookieList,
+	)
+	core.httpClient.Jar = jar
 	return nil
 }
 
-func (mgr *Manager) encryptPassword(publicKeyMod, publicKeyExp string) (string, error) {
+func (core *Core) encryptPassword(publicKeyMod, publicKeyExp string) (string, error) {
 	modules, ret := new(big.Int).SetString(publicKeyMod, 16)
 	if !ret {
 		return "", fmt.Errorf("fail to generate publicKeyMod, type = big.Int, publicKeyMod = %s", publicKeyMod)
@@ -337,7 +400,7 @@ func (mgr *Manager) encryptPassword(publicKeyMod, publicKeyExp string) (string, 
 	publicKey.N = modules
 	publicKey.E = int(exp)
 
-	passwordData := []byte(mgr.loginInfo.Password)
+	passwordData := []byte(core.loginInfo.Password)
 	encryptedPassword, err := rsa.EncryptPKCS1v15(rand.Reader, &publicKey, passwordData)
 	if err != nil {
 		return "", err
@@ -346,7 +409,7 @@ func (mgr *Manager) encryptPassword(publicKeyMod, publicKeyExp string) (string, 
 	return encodedPassword, nil
 }
 
-func (mgr *Manager) loginAuthPost(reqUrl, postData string) (*http.Response, error) {
+func (core *Core) loginAuthPost(reqUrl, postData string) (*http.Response, error) {
 	reqBody := new(bytes.Buffer)
 	multipartWriter := multipart.NewWriter(reqBody)
 	multipartWriter.WriteField("input_protobuf_encoded", postData)
@@ -357,8 +420,6 @@ func (mgr *Manager) loginAuthPost(reqUrl, postData string) (*http.Response, erro
 		return nil, err
 	}
 
-	httpReq.Header.Set("Referer", kURI_STEAM_STROE+"/")
-	httpReq.Header.Set("Origin", kURI_STEAM_STROE)
 	httpReq.Header.Set("Content-Type", multipartWriter.FormDataContentType())
-	return mgr.httpClient.Do(httpReq)
+	return core.httpClient.Do(httpReq)
 }
