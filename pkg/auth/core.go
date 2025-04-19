@@ -18,25 +18,27 @@ type LoginInfo struct {
 	Password string
 }
 
-type Token struct {
-	Url   string
-	Nonce string
-	Auth  string
+// type Token struct {
+// 	Url   string
+// 	Nonce string
+// 	Auth  string
+// }
+
+type OAuth struct {
+	SteamId uint64
 }
 
 type Core struct {
+	httpClient http.Client
 	loginInfo  LoginInfo
 	sessionId  string
-	httpClient http.Client
-	steamId    string
-	tokenList  []Token
+	oauth      OAuth
 }
 
 func (core *Core) Init(info LoginInfo) {
 	core.loginInfo = info
 	core.sessionId = ""
 	core.httpClient = http.Client{}
-	core.steamId = ""
 }
 
 // timeout: millsecond, set only while timeout > 0;
