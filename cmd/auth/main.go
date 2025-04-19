@@ -6,7 +6,7 @@ import (
 )
 
 func main() {
-	mgr := auth.Manager{}
+	mgr := auth.Core{}
 	mgr.Init(auth.LoginInfo{
 		UserName: "user",
 		Password: "password",

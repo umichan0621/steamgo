@@ -19,7 +19,7 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-func (mgr *Manager) Login() error {
+func (mgr *Core) Login() error {
 	log.Info("Connecting to steam server...")
 	// Get session id from steam store
 	err := mgr.getSessionId()
@@ -73,7 +73,7 @@ func (mgr *Manager) Login() error {
 	return nil
 }
 
-func (mgr *Manager) getSessionId() error {
+func (mgr *Core) getSessionId() error {
 	httpReq, err := http.NewRequest("GET", kURI_STEAM_STROE, nil)
 	if err != nil {
 		return err
@@ -104,7 +104,7 @@ func (mgr *Manager) getSessionId() error {
 	return nil
 }
 
-func (mgr *Manager) getPasswordRSAPublicKey(rsaRes *pb.CAuthentication_GetPasswordRSAPublicKey_Response) error {
+func (mgr *Core) getPasswordRSAPublicKey(rsaRes *pb.CAuthentication_GetPasswordRSAPublicKey_Response) error {
 	pbReq := pb.CAuthentication_GetPasswordRSAPublicKey_Request{
 		AccountName: mgr.loginInfo.UserName,
 	}
@@ -142,7 +142,7 @@ func (mgr *Manager) getPasswordRSAPublicKey(rsaRes *pb.CAuthentication_GetPasswo
 	return nil
 }
 
-func (mgr *Manager) beginAuthSessionViaCredentials(encryptedPassword string, rsaTimestamp uint64,
+func (mgr *Core) beginAuthSessionViaCredentials(encryptedPassword string, rsaTimestamp uint64,
 	beginAuthRes *pb.CAuthentication_BeginAuthSessionViaCredentials_Response) error {
 	pbReq := pb.CAuthentication_BeginAuthSessionViaCredentials_Request{
 		AccountName:         mgr.loginInfo.UserName,
@@ -200,7 +200,7 @@ func (mgr *Manager) beginAuthSessionViaCredentials(encryptedPassword string, rsa
 	return nil
 }
 
-func (mgr *Manager) updateAuthSessionWithSteamGuardCode(clientId, steamId uint64, guardType pb.EAuthSessionGuardType,
+func (mgr *Core) updateAuthSessionWithSteamGuardCode(clientId, steamId uint64, guardType pb.EAuthSessionGuardType,
 	updateAuthRes *pb.CAuthentication_UpdateAuthSessionWithSteamGuardCode_Response) error {
 	log.Errorln("clientId =", clientId)
 	log.Errorln("SteamId =", steamId)
@@ -253,7 +253,7 @@ func (mgr *Manager) updateAuthSessionWithSteamGuardCode(clientId, steamId uint64
 	return proto.Unmarshal(data, updateAuthRes)
 }
 
-func (mgr *Manager) pollAuthSessionStatus(clientId uint64, requestId []byte,
+func (mgr *Core) pollAuthSessionStatus(clientId uint64, requestId []byte,
 	pollAuthRes *pb.CAuthentication_PollAuthSessionStatus_Response) error {
 	pbReq := pb.CAuthentication_PollAuthSessionStatus_Request{
 		ClientId:  clientId,
@@ -289,7 +289,7 @@ func (mgr *Manager) pollAuthSessionStatus(clientId uint64, requestId []byte,
 	return proto.Unmarshal(data, pollAuthRes)
 }
 
-func (mgr *Manager) finalizeLogin(refreshToken string) error {
+func (mgr *Core) finalizeLogin(refreshToken string) error {
 	reqBody := new(bytes.Buffer)
 	multipartWriter := multipart.NewWriter(reqBody)
 	multipartWriter.WriteField("nonce", refreshToken)
@@ -323,7 +323,7 @@ func (mgr *Manager) finalizeLogin(refreshToken string) error {
 	return nil
 }
 
-func (mgr *Manager) encryptPassword(publicKeyMod, publicKeyExp string) (string, error) {
+func (mgr *Core) encryptPassword(publicKeyMod, publicKeyExp string) (string, error) {
 	modules, ret := new(big.Int).SetString(publicKeyMod, 16)
 	if !ret {
 		return "", fmt.Errorf("fail to generate publicKeyMod, type = big.Int, publicKeyMod = %s", publicKeyMod)
@@ -346,7 +346,7 @@ func (mgr *Manager) encryptPassword(publicKeyMod, publicKeyExp string) (string, 
 	return encodedPassword, nil
 }
 
-func (mgr *Manager) loginAuthPost(reqUrl, postData string) (*http.Response, error) {
+func (mgr *Core) loginAuthPost(reqUrl, postData string) (*http.Response, error) {
 	reqBody := new(bytes.Buffer)
 	multipartWriter := multipart.NewWriter(reqBody)
 	multipartWriter.WriteField("input_protobuf_encoded", postData)

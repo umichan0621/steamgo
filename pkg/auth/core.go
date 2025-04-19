@@ -18,13 +18,13 @@ type LoginInfo struct {
 	Password string
 }
 
-type Manager struct {
+type Core struct {
 	loginInfo  LoginInfo
 	sessionId  string
 	httpClient http.Client
 }
 
-func (mgr *Manager) Init(info LoginInfo) {
+func (mgr *Core) Init(info LoginInfo) {
 	mgr.loginInfo = info
 	mgr.sessionId = ""
 	mgr.httpClient = http.Client{}
@@ -32,7 +32,7 @@ func (mgr *Manager) Init(info LoginInfo) {
 
 // timeout: millsecond, set only while timeout > 0;
 // proxy: if proxyUrl == "", ignore
-func (mgr *Manager) SetHttpParam(timeout int, proxy string) error {
+func (mgr *Core) SetHttpParam(timeout int, proxy string) error {
 	transport := &http.Transport{}
 	if proxy != "" {
 		proxyUrl, err := url.Parse(proxy)
