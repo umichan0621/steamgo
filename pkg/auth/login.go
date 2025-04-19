@@ -10,6 +10,7 @@ import (
 	"math/big"
 	"mime/multipart"
 	"net/http"
+	errcode "steam/pkg/err"
 	pb "steam/pkg/proto"
 	"steam/pkg/utils"
 	"strconv"
@@ -180,19 +181,10 @@ func (core *Core) beginAuthSessionViaCredentials(encryptedPassword string, rsaTi
 	if res.StatusCode != 200 {
 		return fmt.Errorf("fail to request BeginAuthSessionViaCredentials, status code = %d", res.StatusCode)
 	}
-
-	xEresult, err := strconv.Atoi(res.Header.Get("X-Eresult"))
+	err = errcode.CheckHeader(&res.Header)
 	if err != nil {
 		return err
 	}
-	if xEresult != 1 {
-		if xEresult == 5 {
-			return fmt.Errorf("fail to login, error: Invaild username/password")
-		} else {
-			return fmt.Errorf("fail to login, X-Eresult: %d", xEresult)
-		}
-	}
-
 	err = proto.Unmarshal(data, beginAuthRes)
 	if err != nil {
 		return err
@@ -281,13 +273,9 @@ func (core *Core) pollAuthSessionStatus(clientId uint64, requestId []byte,
 	if res.StatusCode != 200 {
 		return fmt.Errorf("fail to request PollAuthSessionStatus, status code = %d", res.StatusCode)
 	}
-
-	xEresult, err := strconv.Atoi(res.Header.Get("X-Eresult"))
+	err = errcode.CheckHeader(&res.Header)
 	if err != nil {
 		return err
-	}
-	if xEresult != 1 {
-		return fmt.Errorf("fail to login, X-Eresult: %d", xEresult)
 	}
 	return proto.Unmarshal(data, pollAuthRes)
 }
