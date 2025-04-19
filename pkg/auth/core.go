@@ -18,27 +18,17 @@ type LoginInfo struct {
 	Password string
 }
 
-// type Token struct {
-// 	Url   string
-// 	Nonce string
-// 	Auth  string
-// }
-
-type OAuth struct {
-	SteamId uint64
-}
-
 type Core struct {
-	httpClient http.Client
+	httpClient *http.Client
 	loginInfo  LoginInfo
 	sessionId  string
-	oauth      OAuth
+	SteamId    int64
 }
 
-func (core *Core) Init(info LoginInfo) {
+func (core *Core) Init(httpClient *http.Client, info LoginInfo) {
 	core.loginInfo = info
 	core.sessionId = ""
-	core.httpClient = http.Client{}
+	core.httpClient = httpClient
 }
 
 // timeout: millsecond, set only while timeout > 0;
