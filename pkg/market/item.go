@@ -74,3 +74,27 @@ func (core *Core) GetItemPriceHistory(appID uint64, marketHashName string, lastN
 	}
 	return resList, nil
 }
+
+func (core *Core) GetItemPriceOverview(appID uint64, country, currencyID, marketHashName string) ([]*ItemPriceInfo, error) {
+	val := url.Values{
+		"appid":            {strconv.FormatUint(appID, 10)},
+		"country":          {country},
+		"currencyID":       {currencyID},
+		"market_hash_name": {marketHashName},
+	}
+
+	res, err := core.httpClient.Get("https://steamcommunity.com/market/priceoverview/?" + val.Encode())
+	if err != nil {
+		return nil, err
+	}
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("fail to get item [%s]'s price overview, appID: %d, code: %d", marketHashName, appID, res.StatusCode)
+	}
+	data, err := io.ReadAll(res.Body)
+	if err != nil {
+		return nil, err
+	}
+	fmt.Println(string(data))
+	return nil, nil
+}
