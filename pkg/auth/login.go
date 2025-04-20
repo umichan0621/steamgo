@@ -11,8 +11,6 @@ import (
 	"math/big"
 	"mime/multipart"
 	"net/http"
-	"net/http/cookiejar"
-	"net/url"
 
 	errcode "steam/pkg/err"
 	pb "steam/pkg/proto"
@@ -38,7 +36,6 @@ func (core *Core) Login() error {
 	if err != nil {
 		return err
 	}
-
 	time.Sleep(time.Millisecond * time.Duration(utils.RandRange(120, 300)))
 
 	log.Infof("Try login as user: %s...", core.loginInfo.UserName)
@@ -66,11 +63,18 @@ func (core *Core) Login() error {
 	if err != nil {
 		return err
 	}
-	err = core.finalizeLogin(pollAuthRes.RefreshToken)
+	nonce, auth, err := core.finalizeLogin(pollAuthRes.RefreshToken)
 	if err != nil {
 		return err
 	}
+	time.Sleep(time.Millisecond * time.Duration(utils.RandRange(120, 300)))
 
+	// Generate cookie and persistence
+	err = core.generateCookieData(nonce, auth)
+	if err != nil {
+		return err
+	}
+	log.Info("Login succeeded.")
 	return nil
 }
 
@@ -160,12 +164,8 @@ func (core *Core) beginAuthSessionViaCredentials(encryptedPassword string, rsaTi
 	return nil
 }
 
-func (core *Core) updateAuthSessionWithSteamGuardCode(clientId, steamId uint64, guardType pb.EAuthSessionGuardType,
+func (core *Core) updateAuthSessionWithSteamGuardCode(clientID, steamID uint64, guardType pb.EAuthSessionGuardType,
 	updateAuthRes *pb.CAuthentication_UpdateAuthSessionWithSteamGuardCode_Response) error {
-	log.Errorln("clientId =", clientId)
-	log.Errorln("SteamId =", steamId)
-	log.Errorln("GuardType =", guardType)
-
 	code := ""
 	if guardType == pb.EAuthSessionGuardType_k_EAuthSessionGuardType_DeviceCode ||
 		guardType == pb.EAuthSessionGuardType_k_EAuthSessionGuardType_DeviceConfirmation {
@@ -185,8 +185,8 @@ func (core *Core) updateAuthSessionWithSteamGuardCode(clientId, steamId uint64, 
 		return fmt.Errorf("fail, guardType = %d", guardType)
 	}
 	pbReq := pb.CAuthentication_UpdateAuthSessionWithSteamGuardCode_Request{
-		ClientId: clientId,
-		SteamId:  steamId,
+		ClientId: clientID,
+		SteamId:  steamID,
 		Code:     code,
 		CodeType: guardType,
 	}
@@ -213,11 +213,11 @@ func (core *Core) updateAuthSessionWithSteamGuardCode(clientId, steamId uint64, 
 	return proto.Unmarshal(data, updateAuthRes)
 }
 
-func (core *Core) pollAuthSessionStatus(clientId uint64, requestId []byte,
+func (core *Core) pollAuthSessionStatus(clientID uint64, requestID []byte,
 	pollAuthRes *pb.CAuthentication_PollAuthSessionStatus_Response) error {
 	pbReq := pb.CAuthentication_PollAuthSessionStatus_Request{
-		ClientId:  clientId,
-		RequestId: requestId,
+		ClientId:  clientID,
+		RequestId: requestID,
 	}
 
 	marshalData, err := proto.Marshal(&pbReq)
@@ -245,144 +245,105 @@ func (core *Core) pollAuthSessionStatus(clientId uint64, requestId []byte,
 	return proto.Unmarshal(data, pollAuthRes)
 }
 
-func (core *Core) finalizeLogin(refreshToken string) error {
+func (core *Core) finalizeLogin(refreshToken string) (string, string, error) {
+	// Generate sessiond ID
 	randomBytes := make([]byte, 12)
 	if _, err := rand.Read(randomBytes); err != nil {
-		return err
+		return "", "", err
 	}
 
 	sessionID := make([]byte, hex.EncodedLen(len(randomBytes)))
 	hex.Encode(sessionID, randomBytes)
-	core.sessionId = string(sessionID)
+	core.cookieData.SessionID = string(sessionID)
 
+	// Finalizelogin request
 	reqBody := new(bytes.Buffer)
 	multipartWriter := multipart.NewWriter(reqBody)
 	multipartWriter.WriteField("nonce", refreshToken)
-	multipartWriter.WriteField("sessionid", core.sessionId)
-	multipartWriter.WriteField("redir", fmt.Sprintf("%s/login/home/?goto=", kURI_STEAM_STROE))
+	multipartWriter.WriteField("sessionid", core.cookieData.SessionID)
+	multipartWriter.WriteField("redir", fmt.Sprintf("%s/login/home/?goto=", kURI_STEAM_COMMUNITY))
 	multipartWriter.Close()
 
 	reqUrl := "https://login.steampowered.com/jwt/finalizelogin"
 	httpReq, err := http.NewRequest("POST", reqUrl, reqBody)
 	if err != nil {
+		return "", "", err
+	}
+	httpReq.Header.Set("Content-Type", multipartWriter.FormDataContentType())
+	res, err := core.httpClient.Do(httpReq)
+	if err != nil {
+		return "", "", err
+	}
+	defer res.Body.Close()
+	data, err := io.ReadAll(res.Body)
+	if err != nil {
+		return "", "", err
+	}
+	if res.StatusCode != 200 {
+		return "", "", fmt.Errorf("fail to post finalizeLogin, status code = %d", res.StatusCode)
+	}
+
+	// for _, cookie := range res.Cookies() {
+	// 	if cookie.Name == "steamRefresh_steam" {
+	// 		core.cookie["login.steampowered.com"] = []*http.Cookie{cookie}
+	// 		break
+	// 	}
+	// }
+
+	jsonData := string(data)
+	steamID := gjson.Get(jsonData, "steamID").String()
+	if steamID == "" {
+		return "", "", fmt.Errorf("fail to get steam Id, response data: %s", jsonData)
+	}
+	core.cookieData.SteamID = steamID
+	for _, tokenData := range gjson.Get(jsonData, "transfer_info").Array() {
+		if tokenData.Get("url").String() == kURI_STEAM_SETTOKEN {
+			params := tokenData.Get("params")
+			nonce := params.Get("nonce").String()
+			auth := params.Get("auth").String()
+			return nonce, auth, nil
+		}
+	}
+	return "", "", fmt.Errorf("fail to get nonce and auth")
+}
+
+func (core *Core) generateCookieData(nonce, auth string) error {
+	// Get loginSecure
+	steamID := core.cookieData.SteamID
+	reqBody := new(bytes.Buffer)
+	multipartWriter := multipart.NewWriter(reqBody)
+	multipartWriter.WriteField("nonce", nonce)
+	multipartWriter.WriteField("auth", auth)
+	multipartWriter.WriteField("steamID", steamID)
+	multipartWriter.Close()
+
+	httpReq, err := http.NewRequest("POST", kURI_STEAM_SETTOKEN, reqBody)
+	if err != nil {
 		return err
 	}
+	httpReq.AddCookie(&http.Cookie{
+		Name:  "sessionid",
+		Value: core.cookieData.SessionID,
+	})
 	httpReq.Header.Set("Content-Type", multipartWriter.FormDataContentType())
 	res, err := core.httpClient.Do(httpReq)
 	if err != nil {
 		return err
 	}
 	defer res.Body.Close()
-	data, err := io.ReadAll(res.Body)
-	if err != nil {
-		return err
-	}
 	if res.StatusCode != 200 {
-		return fmt.Errorf("fail to post finalizeLogin, status code = %d", res.StatusCode)
+		return fmt.Errorf("fail to post settoken, status code = %d", res.StatusCode)
 	}
-	// Add cookie
-	jar, err := cookiejar.New(nil)
-	if err != nil {
-		return err
-	}
-	cookieList := []*http.Cookie{}
+
 	for _, cookie := range res.Cookies() {
-		if cookie.Name == "steamRefresh_steam" {
-			cookieList = append(cookieList, cookie)
+		if cookie.Name == "steamLoginSecure" {
+			core.cookieData.MaxAge = cookie.MaxAge
+			core.cookieData.Expires = cookie.Expires.Unix()
+			core.cookieData.SteamLoginSecure = cookie.Value
 			break
 		}
 	}
-	jar.SetCookies(
-		&url.URL{
-			Scheme: "https",
-			Host:   "login.steampowered.com",
-		},
-		cookieList,
-	)
-
-	// Get loginSecure
-	jsonData := string(data)
-	steamId := gjson.Get(jsonData, "steamID").String()
-	if steamId == "" {
-		return fmt.Errorf("fail to get steam Id, response data: %s", jsonData)
-	}
-	nonce := ""
-	auth := ""
-	for _, tokenData := range gjson.Get(jsonData, "transfer_info").Array() {
-		reqUrl := tokenData.Get("url").String()
-		if reqUrl != "https://steamcommunity.com/login/settoken" {
-			continue
-		}
-		params := tokenData.Get("params")
-		nonce = params.Get("nonce").String()
-		auth = params.Get("auth").String()
-		break
-	}
-	reqBody = new(bytes.Buffer)
-	multipartWriter = multipart.NewWriter(reqBody)
-	multipartWriter.WriteField("nonce", nonce)
-	multipartWriter.WriteField("auth", auth)
-	multipartWriter.WriteField("steamID", steamId)
-	multipartWriter.Close()
-
-	httpReq, err = http.NewRequest("POST", reqUrl, reqBody)
-	if err != nil {
-		return err
-	}
-	httpReq.AddCookie(&http.Cookie{
-		Name:  "sessionid",
-		Value: core.sessionId,
-	})
-	httpReq.Header.Set("Content-Type", multipartWriter.FormDataContentType())
-	res, err = http.DefaultClient.Do(httpReq)
-	if err != nil {
-		return err
-	}
-
-	cookieList = []*http.Cookie{}
-	for _, cookie := range res.Cookies() {
-		if cookie.Name != "steamLoginSecure" {
-			continue
-		}
-		cookieList = append(cookieList, cookie)
-		break
-	}
-	cookieList = append(cookieList, &http.Cookie{
-		Name:     "sessionid",
-		Value:    core.sessionId,
-		SameSite: http.SameSiteNoneMode,
-		Secure:   true,
-		HttpOnly: true,
-		Path:     "/"},
-	)
-	jar.SetCookies(
-		&url.URL{
-			Scheme: "https",
-			Host:   "steamcommunity.com",
-		},
-		cookieList,
-	)
-
-	core.SteamId, err = strconv.ParseInt(steamId, 10, 64)
-	if err != nil {
-		return err
-	}
-
-	cookieList = []*http.Cookie{
-		{Name: "mobileClientVersion", Value: "0 (2.1.3)"},
-		{Name: "mobileClient", Value: "android"},
-		{Name: "steamid", Value: steamId},
-		{Name: "Steam_Language", Value: "english"},
-		{Name: "dob", Value: ""},
-	}
-	jar.SetCookies(
-		&url.URL{
-			Scheme: "https",
-			Host:   "steamcommunity.com",
-		},
-		cookieList,
-	)
-	core.httpClient.Jar = jar
+	core.ApplyCookie()
 	return nil
 }
 

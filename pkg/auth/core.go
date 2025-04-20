@@ -11,6 +11,7 @@ const (
 	kURI_STEAM_API       = "https://api.steampowered.com"
 	kURI_STEAM_STROE     = "https://store.steampowered.com"
 	kURI_STEAM_COMMUNITY = "https://steamcommunity.com"
+	kURI_STEAM_SETTOKEN  = "https://steamcommunity.com/login/settoken"
 )
 
 type LoginInfo struct {
@@ -21,13 +22,11 @@ type LoginInfo struct {
 type Core struct {
 	httpClient *http.Client
 	loginInfo  LoginInfo
-	sessionId  string
-	SteamId    int64
+	cookieData CookieData
 }
 
 func (core *Core) Init(httpClient *http.Client, info LoginInfo) {
 	core.loginInfo = info
-	core.sessionId = ""
 	core.httpClient = httpClient
 }
 
