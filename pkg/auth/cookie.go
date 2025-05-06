@@ -1,10 +1,15 @@
 package auth
 
 import (
+	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
+	"os"
 	"time"
+
+	"github.com/tidwall/gjson"
 )
 
 type CookieData struct {
@@ -55,4 +60,44 @@ func (core *Core) ApplyCookie() {
 		cookieList,
 	)
 	core.httpClient.Jar = jar
+}
+
+func (core *Core) SaveCookie(cookiePath string) error {
+	cookieData, _ := json.Marshal(core.cookieData)
+	file, err := os.OpenFile(cookiePath, os.O_WRONLY|os.O_CREATE, 0644)
+	if err != nil {
+		return err
+	}
+
+	defer file.Close()
+
+	_, err = file.Write(cookieData)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (core *Core) LoadCookie(cookiePath string) error {
+	file, err := os.Open(cookiePath)
+	if err != nil {
+		return err
+	}
+
+	defer file.Close()
+	data, err := io.ReadAll(file)
+	if err != nil {
+		return err
+	}
+	jsonData := string(data)
+	cookieData := CookieData{
+		SessionID:        gjson.Get(jsonData, "SessionID").String(),
+		SteamLoginSecure: gjson.Get(jsonData, "SteamLoginSecure").String(),
+		SteamID:          gjson.Get(jsonData, "SteamID").String(),
+		Expires:          gjson.Get(jsonData, "Expires").Int(),
+		MaxAge:           int(gjson.Get(jsonData, "MaxAge").Int()),
+	}
+	core.SetCookie(cookieData)
+	return nil
 }
