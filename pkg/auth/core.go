@@ -54,3 +54,7 @@ func (core *Core) SetHttpParam(timeout int, proxy string) error {
 	core.httpClient.Transport = transport
 	return nil
 }
+
+func (core *Core) SteamID() string {
+	return core.cookieData.SteamID
+}
