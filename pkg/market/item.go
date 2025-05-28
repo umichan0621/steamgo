@@ -98,3 +98,25 @@ func (core *Core) GetItemPriceOverview(appID uint64, country, currencyID, market
 	fmt.Println(string(data))
 	return nil, nil
 }
+
+func (core *Core) GetItemMarketList() (error, error) {
+	// https://steamcommunity.com/market/listings/730/Glove%20Case
+	_, err := core.httpClient.Get("https://steamcommunity.com/market/listings/730/P250%20%7C%20Boreal%20Forest%20%28Field-Tested%29")
+	if err != nil {
+		return nil, err
+	}
+
+	res, err := core.httpClient.Get("https://steamcommunity.com/market/listings/730/P250%20%7C%20Boreal%20Forest%20%28Field-Tested%29/render/?query=&start=0&count=10")
+	if err != nil {
+		return nil, err
+	}
+
+	defer res.Body.Close()
+	data, err := io.ReadAll(res.Body)
+	if err != nil {
+		return nil, err
+	}
+	fmt.Println("here")
+	fmt.Println(string(data))
+	return nil, nil
+}
