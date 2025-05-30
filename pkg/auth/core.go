@@ -55,6 +55,12 @@ func (core *Core) SetHttpParam(timeout int, proxy string) error {
 	return nil
 }
 
+func (core *Core) HttpClient() *http.Client { return core.httpClient }
+
 func (core *Core) SteamID() string {
 	return core.cookieData.SteamID
+}
+
+func (core *Core) SessionID() string {
+	return core.cookieData.SessionID
 }
