@@ -2,7 +2,6 @@ package market
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -19,77 +18,50 @@ type MarketSellResponse struct {
 	EmailDomain                string `json:"email_domain"`
 }
 
-func (core *Core) GetProfileURL() (string, error) {
-	tmpClient := *core.authCore.HttpClient()
-	// tmpClient := http.Client{
-	// 	Jar: core.authCore.HttpClient().Jar,
-	// }
-
-	/* We do not follow redirect, we want to know where it'd redirect us.  */
-	tmpClient.CheckRedirect = func(req *http.Request, via []*http.Request) error {
-		return errors.New("do not redirect")
-	}
-
-	/* Query normal, this will redirect us.  */
-	resp, err := tmpClient.Get("https://steamcommunity.com/my")
-	if resp == nil {
-		return "", err
-	}
-
-	resp.Body.Close()
-	if resp.StatusCode != http.StatusFound {
-		return "", fmt.Errorf("http error: %d", resp.StatusCode)
-	}
-
-	/* We now have a few useful variables in header, for now, we will just grap "Location".  */
-	return resp.Header.Get("Location"), nil
-}
-
 func (core *Core) CreateSellOrder(appID uint32, contextID, assetID, amount, receivedPrice uint64) (*MarketSellResponse, error) {
-	body := url.Values{
-		"amount":    {strconv.FormatUint(amount, 10)},
-		"appid":     {strconv.FormatUint(uint64(appID), 10)},
+	reqUrl := "https://steamcommunity.com/market/sellitem/"
+	profileUrl := core.authCore.ProfileUrl()
+	if profileUrl == "" {
+		return nil, fmt.Errorf("fail to get http header refer")
+	}
+	reqHeader := http.Header{}
+	reqHeader.Add("Content-Type", "application/x-www-form-urlencoded")
+	reqHeader.Add("Referer", profileUrl+"inventory/")
+	reqBody := url.Values{
 		"assetid":   {strconv.FormatUint(assetID, 10)},
-		"contextid": {strconv.FormatUint(contextID, 10)},
-		"price":     {strconv.FormatUint(receivedPrice, 10)},
 		"sessionid": {core.authCore.SessionID()},
+		"contextid": {strconv.FormatUint(contextID, 10)},
+		"appid":     {strconv.FormatUint(uint64(appID), 10)},
+		"amount":    {strconv.FormatUint(amount, 10)},
+		"price":     {strconv.FormatUint(receivedPrice, 10)},
 	}
 
-	req, err := http.NewRequest(http.MethodPost, "https://steamcommunity.com/market/sellitem/", strings.NewReader(body.Encode()))
-
-	fmt.Println(core.authCore.SessionID())
-	fmt.Println("-----------------")
+	req, err := http.NewRequest(http.MethodPost, reqUrl, strings.NewReader(reqBody.Encode()))
 	if err != nil {
 		return nil, err
 	}
-	profileURL, err := core.GetProfileURL()
+
+	req.Header = reqHeader
+
+	res, err := core.authCore.HttpClient().Do(req)
 	if err != nil {
 		return nil, err
 	}
-	fmt.Println(profileURL + "inventory/")
-	req.Header.Add("Referer", profileURL+"inventory/")
+	defer res.Body.Close()
 
-	resp, err := core.authCore.HttpClient().Do(req)
-	if resp != nil {
-		defer resp.Body.Close()
-	}
-
+	data, err := io.ReadAll(res.Body)
 	if err != nil {
 		return nil, err
 	}
-	fmt.Println(core.authCore.SessionID())
-	if resp.StatusCode != http.StatusOK {
-		data, err := io.ReadAll(resp.Body)
-		if err != nil {
-			return nil, fmt.Errorf("http error: %d, %s", resp.StatusCode, err.Error())
-		}
-		return nil, fmt.Errorf("http error: %d, %s", resp.StatusCode, string(data))
+
+	if res.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("http error: %d, %s", res.StatusCode, string(data))
 	}
 
 	response := &MarketSellResponse{}
-	if err = json.NewDecoder(resp.Body).Decode(response); err != nil {
+	err = json.Unmarshal(data, response)
+	if err != nil {
 		return nil, err
 	}
-
 	return response, nil
 }

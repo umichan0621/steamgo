@@ -1,10 +1,13 @@
 package auth
 
 import (
+	"fmt"
 	"net"
 	"net/http"
 	"net/url"
 	"time"
+
+	log "github.com/sirupsen/logrus"
 )
 
 const (
@@ -23,11 +26,13 @@ type Core struct {
 	httpClient *http.Client
 	loginInfo  LoginInfo
 	cookieData CookieData
+	profileUrl string
 }
 
 func (core *Core) Init(httpClient *http.Client, info LoginInfo) {
 	core.loginInfo = info
 	core.httpClient = httpClient
+	core.profileUrl = ""
 }
 
 func (core *Core) HttpClient() *http.Client { return core.httpClient }
@@ -57,4 +62,17 @@ func (core *Core) SetHttpParam(timeout int, proxy string) error {
 	}
 	core.httpClient.Transport = transport
 	return nil
+}
+
+func (core *Core) ProfileUrl() string {
+	if core.profileUrl != "" {
+		return core.profileUrl
+	}
+	res, err := core.getProfileUrl()
+	fmt.Println("getProfileUrl")
+	if err != nil {
+		log.Errorf("Fail to get profile URL, error: %s", err.Error())
+		return ""
+	}
+	return res
 }
