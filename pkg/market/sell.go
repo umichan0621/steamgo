@@ -65,3 +65,5 @@ func (core *Core) CreateSellOrder(appID uint32, contextID, assetID, amount, paym
 	}
 	return response, nil
 }
+
+func (core *Core) CancelSellOrder() {}
