@@ -18,7 +18,7 @@ type MarketSellResponse struct {
 	EmailDomain                string `json:"email_domain"`
 }
 
-func (core *Core) CreateSellOrder(appID uint32, contextID, assetID, amount, receivedPrice uint64) (*MarketSellResponse, error) {
+func (core *Core) CreateSellOrder(appID uint32, contextID, assetID, amount, paymentPrice uint64) (*MarketSellResponse, error) {
 	reqUrl := "https://steamcommunity.com/market/sellitem/"
 	profileUrl := core.authCore.ProfileUrl()
 	if profileUrl == "" {
@@ -33,7 +33,7 @@ func (core *Core) CreateSellOrder(appID uint32, contextID, assetID, amount, rece
 		"contextid": {strconv.FormatUint(contextID, 10)},
 		"appid":     {strconv.FormatUint(uint64(appID), 10)},
 		"amount":    {strconv.FormatUint(amount, 10)},
-		"price":     {strconv.FormatUint(receivedPrice, 10)},
+		"price":     {strconv.FormatUint(paymentPrice, 10)},
 	}
 
 	req, err := http.NewRequest(http.MethodPost, reqUrl, strings.NewReader(reqBody.Encode()))
