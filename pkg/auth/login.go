@@ -11,6 +11,7 @@ import (
 	"math/big"
 	"mime/multipart"
 	"net/http"
+	"net/url"
 
 	errcode "steam/pkg/err"
 	pb "steam/pkg/proto"
@@ -383,4 +384,20 @@ func (core *Core) loginAuthPost(reqUrl, postData string) (*http.Response, error)
 
 	httpReq.Header.Set("Content-Type", multipartWriter.FormDataContentType())
 	return core.httpClient.Do(httpReq)
+}
+
+func (core *Core) Refresh() error {
+	resp, err := core.httpClient.Get("https://login.steampowered.com/jwt/refresh?redir=https%3A%2F%2Fsteamcommunity.com")
+	if err != nil {
+		return err
+	}
+
+	jar := core.httpClient.Jar
+	for _, cookie := range resp.Cookies() {
+		if cookie.Name == "steamRefresh_steam" {
+			jar.SetCookies(&url.URL{Scheme: "https", Host: "login.steampowered.com"}, []*http.Cookie{cookie})
+			break
+		}
+	}
+	return nil
 }
