@@ -1,15 +1,11 @@
 package market
 
 import (
-<<<<<<< HEAD
 	"fmt"
 	"io"
 	"net/http"
 	"steam/pkg/auth"
 	"strings"
-=======
-	"steam/pkg/auth"
->>>>>>> main
 )
 
 type Core struct {
