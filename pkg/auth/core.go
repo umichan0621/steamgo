@@ -62,5 +62,17 @@ func (core *Core) SteamID() string {
 }
 
 func (core *Core) SessionID() string {
-	return core.cookieData.SessionID
+	if core.httpClient.Jar == nil {
+		return ""
+	}
+	cookies := core.httpClient.Jar.Cookies(&url.URL{
+		Scheme: "https",
+		Host:   "steamcommunity.com",
+	})
+	for _, cookie := range cookies {
+		if cookie.Name == "sessionid" {
+			return cookie.Value
+		}
+	}
+	return ""
 }

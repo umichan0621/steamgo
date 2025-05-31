@@ -4,36 +4,26 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"steam/pkg/auth"
 	"strings"
-
-	"golang.org/x/net/html"
 )
 
 type Core struct {
-	httpClient *http.Client
+	authCore *auth.Core
 }
 
-func (core *Core) Init(httpClient *http.Client) {
-	core.httpClient = httpClient
-}
-
-func findTitle(n *html.Node) {
-	// if n.Type == html.ElementNode && n.Data == "title" {
-	// 	for c := n.FirstChild; c != nil; c = c.NextSibling {
-	// 		fmt.Println(c.Data) // 这里c.Data将是标题文本内容
-	// 	}
-	// }
-	for c := n.FirstChild; c != nil; c = c.NextSibling {
-		findTitle(c) // 递归查找其他可能的title元素
-	}
+func (core *Core) Init(authCore *auth.Core) {
+	core.authCore = authCore
 }
 
 func (core *Core) WalletBalance() (float64, error) {
 	url := "https://store.steampowered.com/account/history/"
-	res, err := core.httpClient.Get(url)
+	res, err := core.authCore.HttpClient().Get(url)
 	if err != nil {
 		return 0, err
 	}
+	fmt.Println(core.authCore.HttpClient().Jar)
+
 	defer res.Body.Close()
 	if res.StatusCode != http.StatusOK {
 		return 0, fmt.Errorf("fail to get wallet balance, code: %d", res.StatusCode)
