@@ -19,6 +19,12 @@ type BuyOrderResponse struct {
 
 func (core *Core) PlaceBuyOrder(appID uint64, price float64, quantity uint64, currencyID, hashName string) (*BuyOrderResponse, error) {
 	reqUrl := "https://steamcommunity.com/market/createbuyorder/"
+	reqHeader := http.Header{}
+	referer := strings.Replace(hashName, " ", "%20", -1)
+	referer = strings.Replace(referer, "#", "%23", -1)
+	referer = fmt.Sprintf("https://steamcommunity.com/market/listings/%d/%s", appID, referer)
+	reqHeader.Add("Referer", referer)
+	reqHeader.Add("Content-Type", "application/x-www-form-urlencoded")
 	reqBody := url.Values{
 		"appid":            {strconv.FormatUint(appID, 10)},
 		"currency":         {currencyID},
@@ -33,12 +39,7 @@ func (core *Core) PlaceBuyOrder(appID uint64, price float64, quantity uint64, cu
 		return nil, err
 	}
 
-	var referer string
-	referer = strings.Replace(hashName, " ", "%20", -1)
-	referer = strings.Replace(referer, "#", "%23", -1)
-
-	req.Header.Add("Referer", fmt.Sprintf("https://steamcommunity.com/market/listings/%d/%s", appID, referer))
-	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+	req.Header = reqHeader
 
 	res, err := core.authCore.HttpClient().Do(req)
 	if err != nil {
@@ -64,6 +65,9 @@ func (core *Core) PlaceBuyOrder(appID uint64, price float64, quantity uint64, cu
 
 func (core *Core) CancelBuyOrder(orderID uint64) error {
 	reqUrl := "https://steamcommunity.com/market/cancelbuyorder/"
+	reqHeader := http.Header{}
+	reqHeader.Add("Referer", "https://steamcommunity.com/market")
+	reqHeader.Add("Content-Type", "application/x-www-form-urlencoded")
 	reqBody := url.Values{
 		"sessionid":   {core.authCore.SessionID()},
 		"buy_orderid": {strconv.FormatUint(orderID, 10)},
@@ -74,8 +78,7 @@ func (core *Core) CancelBuyOrder(orderID uint64) error {
 		return err
 	}
 
-	req.Header.Add("Referer", "https://steamcommunity.com/market")
-	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+	req.Header = reqHeader
 
 	res, err := core.authCore.HttpClient().Do(req)
 	if res != nil {

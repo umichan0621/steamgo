@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"net/url"
 	"time"
+
+	log "github.com/sirupsen/logrus"
 )
 
 const (
@@ -23,12 +25,18 @@ type Core struct {
 	httpClient *http.Client
 	loginInfo  LoginInfo
 	cookieData CookieData
+	profileUrl string
 }
 
 func (core *Core) Init(httpClient *http.Client, info LoginInfo) {
 	core.loginInfo = info
 	core.httpClient = httpClient
+	core.profileUrl = ""
 }
+
+func (core *Core) HttpClient() *http.Client { return core.httpClient }
+func (core *Core) SteamID() string          { return core.cookieData.SteamID }
+func (core *Core) SessionID() string        { return core.cookieData.SessionID }
 
 // timeout: millsecond, set only while timeout > 0;
 // proxy: if proxyUrl == "", ignore
@@ -55,24 +63,14 @@ func (core *Core) SetHttpParam(timeout int, proxy string) error {
 	return nil
 }
 
-func (core *Core) HttpClient() *http.Client { return core.httpClient }
-
-func (core *Core) SteamID() string {
-	return core.cookieData.SteamID
-}
-
-func (core *Core) SessionID() string {
-	if core.httpClient.Jar == nil {
+func (core *Core) ProfileUrl() string {
+	if core.profileUrl != "" {
+		return core.profileUrl
+	}
+	res, err := core.getProfileUrl()
+	if err != nil {
+		log.Errorf("Fail to get profile URL, error: %s", err.Error())
 		return ""
 	}
-	cookies := core.httpClient.Jar.Cookies(&url.URL{
-		Scheme: "https",
-		Host:   "steamcommunity.com",
-	})
-	for _, cookie := range cookies {
-		if cookie.Name == "sessionid" {
-			return cookie.Value
-		}
-	}
-	return ""
+	return res
 }
