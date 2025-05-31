@@ -17,7 +17,7 @@ type BuyOrderResponse struct {
 	OrderID uint64 `json:"buy_orderid,string"`
 }
 
-func (core *Core) PlaceBuyOrder(appID uint64, paymentPrice float64, quantity uint64, currencyID, hashName string) (*BuyOrderResponse, error) {
+func (core *Core) CreateBuyOrder(appID uint64, paymentPrice float64, quantity uint64, currencyID, hashName string) (*BuyOrderResponse, error) {
 	reqUrl := "https://steamcommunity.com/market/createbuyorder/"
 	reqHeader := http.Header{}
 	referer := strings.Replace(hashName, " ", "%20", -1)
