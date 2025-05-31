@@ -30,6 +30,10 @@ func (core *Core) Init(httpClient *http.Client, info LoginInfo) {
 	core.httpClient = httpClient
 }
 
+func (core *Core) HttpClient() *http.Client { return core.httpClient }
+func (core *Core) SteamID() string          { return core.cookieData.SteamID }
+func (core *Core) SessionID() string        { return core.cookieData.SessionID }
+
 // timeout: millsecond, set only while timeout > 0;
 // proxy: if proxyUrl == "", ignore
 func (core *Core) SetHttpParam(timeout int, proxy string) error {
@@ -53,26 +57,4 @@ func (core *Core) SetHttpParam(timeout int, proxy string) error {
 	}
 	core.httpClient.Transport = transport
 	return nil
-}
-
-func (core *Core) HttpClient() *http.Client { return core.httpClient }
-
-func (core *Core) SteamID() string {
-	return core.cookieData.SteamID
-}
-
-func (core *Core) SessionID() string {
-	if core.httpClient.Jar == nil {
-		return ""
-	}
-	cookies := core.httpClient.Jar.Cookies(&url.URL{
-		Scheme: "https",
-		Host:   "steamcommunity.com",
-	})
-	for _, cookie := range cookies {
-		if cookie.Name == "sessionid" {
-			return cookie.Value
-		}
-	}
-	return ""
 }
