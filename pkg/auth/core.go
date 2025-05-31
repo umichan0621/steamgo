@@ -1,7 +1,6 @@
 package auth
 
 import (
-	"fmt"
 	"net"
 	"net/http"
 	"net/url"
@@ -69,7 +68,6 @@ func (core *Core) ProfileUrl() string {
 		return core.profileUrl
 	}
 	res, err := core.getProfileUrl()
-	fmt.Println("getProfileUrl")
 	if err != nil {
 		log.Errorf("Fail to get profile URL, error: %s", err.Error())
 		return ""
