@@ -11,16 +11,15 @@ import (
 	"math/big"
 	"mime/multipart"
 	"net/http"
-
-	errcode "steam/pkg/err"
-	pb "steam/pkg/proto"
-	"steam/pkg/utils"
 	"strconv"
 	"strings"
 	"time"
 
 	log "github.com/sirupsen/logrus"
 	"github.com/tidwall/gjson"
+	errcode "github.com/umichan0621/steam/pkg/err"
+	pb "github.com/umichan0621/steam/pkg/proto"
+	"github.com/umichan0621/steam/pkg/utils"
 	"google.golang.org/protobuf/proto"
 )
 

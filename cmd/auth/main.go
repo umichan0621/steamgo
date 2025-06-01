@@ -3,7 +3,8 @@ package main
 import (
 	"fmt"
 	"net/http"
-	"steam/pkg/auth"
+
+	"github.com/umichan0621/steam/pkg/auth"
 )
 
 func main() {

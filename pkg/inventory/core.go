@@ -1,7 +1,7 @@
 package inventory
 
 import (
-	"steam/pkg/auth"
+	"github.com/umichan0621/steam/pkg/auth"
 )
 
 type Core struct {

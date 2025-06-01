@@ -6,11 +6,11 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"steam/pkg/utils"
 	"strconv"
 	"time"
 
 	"github.com/tidwall/gjson"
+	"github.com/umichan0621/steam/pkg/utils"
 )
 
 type PriceInfo struct {
