@@ -24,7 +24,7 @@ type SteamSoldOrders struct {
 	SellingPrice   float64
 }
 
-func (core *Core) MarketHistory(appID uint32, contextID uint64) ([]*SteamSoldOrders, error) {
+func (core *Core) HistorySoldOrder(appID uint32, contextID uint64) ([]*SteamSoldOrders, error) {
 	params := url.Values{
 		"l":     {core.language},
 		"count": {strconv.FormatUint(20, 10)},
