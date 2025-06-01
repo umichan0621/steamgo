@@ -24,10 +24,10 @@ type SteamSoldOrders struct {
 	SellingPrice   float64
 }
 
-func (core *Core) HistorySoldOrder(appID uint32, contextID uint64) ([]*SteamSoldOrders, error) {
+func (core *Core) HistorySoldOrder(appID uint32, contextID, count uint64) ([]*SteamSoldOrders, error) {
 	params := url.Values{
 		"l":     {core.language},
-		"count": {strconv.FormatUint(20, 10)},
+		"count": {strconv.FormatUint(count, 10)},
 	}
 
 	url := "https://steamcommunity.com/market/myhistory?" + params.Encode()
@@ -37,7 +37,7 @@ func (core *Core) HistorySoldOrder(appID uint32, contextID uint64) ([]*SteamSold
 	}
 	defer res.Body.Close()
 	if res.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("fail to get wallet balance, code: %d", res.StatusCode)
+		return nil, fmt.Errorf("fail to get market history, code: %d", res.StatusCode)
 	}
 
 	data, err := io.ReadAll(res.Body)
