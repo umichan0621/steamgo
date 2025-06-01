@@ -24,6 +24,13 @@ type SteamSoldOrders struct {
 	SellingPrice   float64
 }
 
+func CalculateReceivedPrice(payment float64) float64 {
+	received := int64(payment * 100)
+	received *= 100
+	received /= 115
+	return float64(received) / 100.0
+}
+
 func (core *Core) HistorySoldOrder(appID uint32, contextID, count uint64) ([]*SteamSoldOrders, error) {
 	params := url.Values{
 		"l":     {core.language},
