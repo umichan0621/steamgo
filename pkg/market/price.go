@@ -37,8 +37,9 @@ type OrderGraph struct {
 	SellOrderGraph []OrderInfo
 }
 
-func (core *Core) getItemNameID(appID uint64, hashName string) (string, error) {
-	reqUrl := fmt.Sprintf("https://steamcommunity.com/market/listings/%d/%s", appID, url.PathEscape(hashName))
+// Get the name ID by hash name, which is used to query history price
+func (core *Core) ItemNameID(appID, hashName string) (string, error) {
+	reqUrl := fmt.Sprintf("https://steamcommunity.com/market/listings/%s/%s", appID, url.PathEscape(hashName))
 	res, err := core.authCore.HttpClient().Get(reqUrl)
 	if err != nil {
 		return "", err
@@ -66,11 +67,7 @@ func (core *Core) getItemNameID(appID uint64, hashName string) (string, error) {
 	return "", fmt.Errorf("fail to get item name ID")
 }
 
-func (core *Core) ItemOrderGraph(appID uint64, hashName string) (*OrderGraph, error) {
-	itemNameID, err := core.getItemNameID(appID, hashName)
-	if err != nil {
-		return nil, err
-	}
+func (core *Core) ItemOrderGraph(appID, itemNameID string) (*OrderGraph, error) {
 	reqBody := url.Values{
 		"item_nameid": {itemNameID},
 		"language":    {core.language},
@@ -118,9 +115,9 @@ func (core *Core) ItemOrderGraph(appID uint64, hashName string) (*OrderGraph, er
 	return orderGraph, nil
 }
 
-func (core *Core) PriceHistory(appID uint64, hashName string, lastNDays int) ([]*PriceInfo, error) {
+func (core *Core) PriceHistory(appID, hashName string, lastNDays int) ([]*PriceInfo, error) {
 	reqBody := url.Values{
-		"appid":            {strconv.FormatUint(appID, 10)},
+		"appid":            {appID},
 		"market_hash_name": {hashName},
 	}
 	reqUrl := fmt.Sprintf("https://steamcommunity.com/market/pricehistory/?%s", reqBody.Encode())
@@ -131,7 +128,7 @@ func (core *Core) PriceHistory(appID uint64, hashName string, lastNDays int) ([]
 
 	defer res.Body.Close()
 	if res.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("fail to get item [%s]'s price history, appID: %d, code: %d", hashName, appID, res.StatusCode)
+		return nil, fmt.Errorf("fail to get item [%s]'s price history, appID: %s, code: %d", hashName, appID, res.StatusCode)
 	}
 	data, err := io.ReadAll(res.Body)
 	if err != nil {
@@ -142,7 +139,7 @@ func (core *Core) PriceHistory(appID uint64, hashName string, lastNDays int) ([]
 
 	success := gjson.Get(jsonData, "success").Bool()
 	if !success {
-		return nil, fmt.Errorf("fail to get item [%s]'s price history, appID: %d", hashName, appID)
+		return nil, fmt.Errorf("fail to get item [%s]'s price history, appID: %s", hashName, appID)
 	}
 
 	priceInfoList := []*PriceInfo{}
@@ -172,9 +169,9 @@ func (core *Core) PriceHistory(appID uint64, hashName string, lastNDays int) ([]
 	return priceInfoList, nil
 }
 
-func (core *Core) PriceOverview(appID uint64, country, currencyID, marketHashName string) (*PriceOverviewInfo, error) {
+func (core *Core) PriceOverview(appID, country, currencyID, marketHashName string) (*PriceOverviewInfo, error) {
 	reqBody := url.Values{
-		"appid":            {strconv.FormatUint(appID, 10)},
+		"appid":            {appID},
 		"country":          {country},
 		"currencyID":       {currencyID},
 		"market_hash_name": {marketHashName},
@@ -186,7 +183,7 @@ func (core *Core) PriceOverview(appID uint64, country, currencyID, marketHashNam
 	}
 	defer res.Body.Close()
 	if res.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("fail to get item [%s]'s price overview, appID: %d, code: %d", marketHashName, appID, res.StatusCode)
+		return nil, fmt.Errorf("fail to get item [%s]'s price overview, appID: %s, code: %d", marketHashName, appID, res.StatusCode)
 	}
 	data, err := io.ReadAll(res.Body)
 	if err != nil {

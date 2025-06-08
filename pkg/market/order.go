@@ -13,15 +13,13 @@ import (
 	"golang.org/x/net/html"
 )
 
-type SteamSoldOrders struct {
-	AppID          uint32 `json:"appid"`
-	ContextID      uint64 `json:"contextid,string"`
+type SteamOrder struct {
 	AssetID        uint64 `json:"assetid,string"`
 	ClassID        uint64 `json:"classid,string"`
 	InstanceID     uint64 `json:"instanceid,string"`
 	MarketName     string `json:"market_name"`
 	MarketHashName string `json:"market_hash_name"`
-	SellingPrice   float64
+	Price          float64
 }
 
 func CalculateReceivedPrice(payment float64) float64 {
@@ -31,7 +29,7 @@ func CalculateReceivedPrice(payment float64) float64 {
 	return float64(received) / 100.0
 }
 
-func (core *Core) HistorySoldOrder(appID uint32, contextID, count uint64) ([]*SteamSoldOrders, error) {
+func (core *Core) HistoryOrder(appID, contextID string, count uint64) ([]*SteamOrder, error) {
 	params := url.Values{
 		"l":     {core.language},
 		"count": {strconv.FormatUint(count, 10)},
@@ -58,11 +56,12 @@ func (core *Core) HistorySoldOrder(appID uint32, contextID, count uint64) ([]*St
 		return nil, fmt.Errorf("fail to get market history")
 	}
 	assets := gjson.Get(jsonData, "assets")
-	assetsList := assets.Get(strconv.FormatUint(uint64(appID), 10)).Get(strconv.FormatUint(uint64(contextID), 10))
+	assetsList := assets.Get(appID).Get(contextID)
 
-	soldOrdersList := []*SteamSoldOrders{}
+	soldOrdersList := []*SteamOrder{}
 	assetsList.ForEach(func(_, val gjson.Result) bool {
-		soldOrder := &SteamSoldOrders{}
+		fmt.Println(val.String())
+		soldOrder := &SteamOrder{}
 		err := json.Unmarshal([]byte(val.String()), soldOrder)
 		if err != nil {
 			return false
@@ -91,11 +90,12 @@ func (core *Core) HistorySoldOrder(appID uint32, contextID, count uint64) ([]*St
 		assetID := soldOrder.AssetID
 		price, ok := assetID2Price[assetID]
 		if ok {
-			soldOrder.SellingPrice = price
+			soldOrder.Price = price
 		}
 	}
 	return soldOrdersList, nil
 }
+
 func generateHistoryRow2AssetIDMap(hovers string) map[string]uint64 {
 	res := map[string]uint64{}
 	hoversList := strings.Split(hovers, ";")
