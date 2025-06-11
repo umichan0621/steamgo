@@ -14,11 +14,12 @@ import (
 )
 
 type SteamOrder struct {
-	AssetID        uint64 `json:"assetid,string"`
+	AssetID        uint64 `json:"id,string"`
 	ClassID        uint64 `json:"classid,string"`
 	InstanceID     uint64 `json:"instanceid,string"`
 	MarketName     string `json:"market_name"`
 	MarketHashName string `json:"market_hash_name"`
+	Commodity      uint64 `json:"commodity"`
 	Price          float64
 }
 
@@ -60,7 +61,6 @@ func (core *Core) HistoryOrder(appID, contextID string, count uint64) ([]*SteamO
 
 	soldOrdersList := []*SteamOrder{}
 	assetsList.ForEach(func(_, val gjson.Result) bool {
-		fmt.Println(val.String())
 		soldOrder := &SteamOrder{}
 		err := json.Unmarshal([]byte(val.String()), soldOrder)
 		if err != nil {
